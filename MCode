@@ -1,0 +1,63 @@
+let
+    Source = Excel.Workbook(File.Contents(FilePath & "CRIS-AFM_Funding_Docs.xlsx"), null, true),
+    #"CRIS-AFM_Funding_Docs_Sheet" = Source{[Item="CRIS-AFM_Funding_Docs",Kind="Sheet"]}[Data],
+    #"Promoted Headers" = Table.PromoteHeaders(#"CRIS-AFM_Funding_Docs_Sheet", [PromoteAllScalars=true]),
+    #"Trimmed Text" = Table.TransformColumns(Table.TransformColumnTypes(#"Promoted Headers", {{"Report Date", type text}, {"EFF_DATE", type text}, {"AFM Ann Amt", type text}, {"Qtr Amt", type text}, {"Qtr2 Amt", type text}, {"Qtr3 Amt", type text}, {"AFM Sub-Lim Amt", type text}}, "en-US"),{{"Report Date", Text.Trim, type text}, {"ADSN", Text.Trim, type text}, {"FunDoc", Text.Trim, type text}, {"EFF_DATE", Text.Trim, type text}, {"FY (4 Char)", Text.Trim, type text}, {"FC", Text.Trim, type text}, {"BA/MFP", Text.Trim, type text}, {"OBAN", Text.Trim, type text}, {"SAG", Text.Trim, type text}, {"PEC", Text.Trim, type text}, {"RCCC", Text.Trim, type text}, {"EEIC", Text.Trim, type text}, {"Obj Sub Class", Text.Trim, type text}, {"Object Class", Text.Trim, type text}, {"DoDEE", Text.Trim, type text}, {"ESP", Text.Trim, type text}, {"Remark01", Text.Trim, type text}, {"SLCode", Text.Trim, type text}, {"SLDesc", Text.Trim, type text}, {"AFM Ann Amt", Text.Trim, type text}, {"SLType", Text.Trim, type text}, {"Qtr Amt", Text.Trim, type text}, {"Qtr2 Amt", Text.Trim, type text}, {"Qtr3 Amt", Text.Trim, type text}, {"AFM Sub-Lim Amt", Text.Trim, type text}}),
+    #"Cleaned Text" = Table.TransformColumns(#"Trimmed Text",{{"Report Date", Text.Clean, type text}, {"ADSN", Text.Clean, type text}, {"FunDoc", Text.Clean, type text}, {"EFF_DATE", Text.Clean, type text}, {"FY (4 Char)", Text.Clean, type text}, {"FC", Text.Clean, type text}, {"BA/MFP", Text.Clean, type text}, {"OBAN", Text.Clean, type text}, {"SAG", Text.Clean, type text}, {"PEC", Text.Clean, type text}, {"RCCC", Text.Clean, type text}, {"EEIC", Text.Clean, type text}, {"Obj Sub Class", Text.Clean, type text}, {"Object Class", Text.Clean, type text}, {"DoDEE", Text.Clean, type text}, {"ESP", Text.Clean, type text}, {"Remark01", Text.Clean, type text}, {"SLCode", Text.Clean, type text}, {"SLDesc", Text.Clean, type text}, {"AFM Ann Amt", Text.Clean, type text}, {"SLType", Text.Clean, type text}, {"Qtr Amt", Text.Clean, type text}, {"Qtr2 Amt", Text.Clean, type text}, {"Qtr3 Amt", Text.Clean, type text}, {"AFM Sub-Lim Amt", Text.Clean, type text}}),
+    #"Renamed Columns" = Table.RenameColumns(#"Cleaned Text",{{"FunDoc", "Funding Doc"}, {"EFF_DATE", "Effective Date"}, {"FY (4 Char)", "FY"}, {"BA/MFP", "BA"}, {"Remark01", "Remarks"}, {"SLCode", "SubLim Code"}, {"SLDesc", "SubLim Description"}, {"SLType", "SubLim Type"}, {"Obj Sub Class", "Object SubClass"}, {"ADSN", "System"}}),
+    #"Added Limitation Column" = Table.AddColumn(#"Renamed Columns", "Limitation", each if [FC] = "50" then
+"RPA"
+
+else if [FC] = "30" then
+"AD O&M"
+
+else if [FC] = "17" then
+"Procurement"
+
+else if [FC] = "57" then
+"AFRC MILCON"
+
+else if [PEC] = "58789F" and Text.Start([Object SubClass],1)="1" then
+"CivPay-DDR"
+
+else if [PEC] = "53738F" and Text.Start([Object SubClass],1)="1" then 
+"CivPay-SAPR"
+
+else if Text.Start([Object SubClass],1)="1" then 
+"CivPay"
+
+else if Text.Start([ESP],2)="YR" or Text.Start([ESP],2)="7C" or Text.Start([ESP],2)= "ZA" or Text.Start([ESP],2)="YR" or [Object SubClass] = "2104103" then 
+"Discretionary"
+
+else if Text.Start([Object SubClass],4)="3201" or Text.Start([Object SubClass],4)="3202" or [Object SubClass] = "254115Z" then 
+"FSRM"
+
+else if Text.Start([Object SubClass],4)="2542" or Text.Start([Object SubClass],4)="3203" or [Object SubClass] = "254115Z" and not Text.Start([Object SubClass],5)="32021" or Text.Start([Object SubClass],5)="32022" then 
+"Oth CE Svcs"
+
+else if [Object SubClass] = "2332010" or [Object SubClass] = "2332111" or [Object SubClass] = "2332210" or [Object SubClass] = "2332310" or [Object SubClass] = "2332110" then 
+"Utilities"
+
+else if [Object SubClass] = "260338C" or [Object SubClass] = "2603313" or [Object SubClass] = "2601411" or [Object SubClass] = "2601413" or [Object SubClass] = "2601401" then 
+"FHP"
+
+else if [PEC] = "53738F" then 
+"SAPR"
+
+else if [PEC] = "58789F" then 
+"DDR"
+
+else if [Object SubClass] = "2581104" then 
+"IDT Lodging"
+
+else if [PEC] = "58160F" or [PEC] = "58168F" then 
+"Recruiting"
+
+else
+"Discretionary"),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Limitation Column",{{"Report Date", type date}, {"Effective Date", type date}, {"AFM Ann Amt", Currency.Type}, {"Qtr Amt", Currency.Type}, {"Qtr2 Amt", Currency.Type}, {"Qtr3 Amt", Currency.Type}, {"AFM Sub-Lim Amt", Currency.Type}, {"Limitation", type text}}),
+    #"Replaced Value-DEAMS" = Table.ReplaceValue(#"Changed Type","387700","DEAMS",Replacer.ReplaceText,{"System"}),
+    #"Replaced Value-Legacy" = Table.ReplaceValue(#"Replaced Value-DEAMS","667100","Legacy",Replacer.ReplaceText,{"System"}),
+    #"Filtered Rows for RPA Only" = Table.SelectRows(#"Replaced Value-Legacy", each ([FC] = "50"))
+in
+    #"Filtered Rows for RPA Only"
